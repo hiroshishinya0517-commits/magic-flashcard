@@ -55,6 +55,7 @@
   let isSwiping = false;
   let setCorrect = 0;
   let setWrong = 0;
+  const preloadedImages = {}; // プリロード済み画像キャッシュ
 
   // タッチ/マウス操作
   let startX = 0;
@@ -142,6 +143,16 @@
       `<span>📝 きょう ${due.length} <ruby>枚<rt>まい</rt></ruby></span>`;
   }
 
+  // ---------- 画像プリロード ----------
+  function preloadSetImages(words) {
+    words.forEach((word) => {
+      if (preloadedImages[word.id]) return;
+      const img = new Image();
+      img.onload = () => { preloadedImages[word.id] = img.src; };
+      img.src = `images/${word.id}.png`;
+    });
+  }
+
   // ---------- 学習開始 ----------
   function startLearning() {
     currentSet = buildSet();
@@ -152,6 +163,7 @@
     currentIndex = 0;
     setCorrect = 0;
     setWrong = 0;
+    preloadSetImages(currentSet);
     showScreen("learn");
     showCard();
   }
@@ -175,23 +187,31 @@
     els.indicatorLeft.style.opacity = 0;
     els.indicatorRight.style.opacity = 0;
 
-    // カード内容 - 画像表示（絵文字は非表示）
+    // カード内容 - 画像のみ表示（絵文字は非表示）
+    els.cardEmoji.style.display = "none";
     els.cardImage.classList.remove("loaded");
-    els.cardImage.src = "";
-    els.cardEmoji.textContent = "⏳";
-    els.cardEmoji.style.display = "";
 
     const imgPath = `images/${word.id}.png`;
-    const img = new Image();
-    img.onload = () => {
-      els.cardImage.src = imgPath;
+    if (preloadedImages[word.id]) {
+      // プリロード済み → 即表示
+      els.cardImage.src = preloadedImages[word.id];
       els.cardImage.classList.add("loaded");
-      els.cardEmoji.style.display = "none";
-    };
-    img.onerror = () => {
-      els.cardEmoji.textContent = word.emoji;
-    };
-    img.src = imgPath;
+    } else {
+      // 未ロード → 読み込み完了まで待つ
+      els.cardImage.src = "";
+      const img = new Image();
+      img.onload = () => {
+        preloadedImages[word.id] = imgPath;
+        els.cardImage.src = imgPath;
+        els.cardImage.classList.add("loaded");
+      };
+      img.onerror = () => {
+        // 画像がない場合のみ絵文字表示
+        els.cardEmoji.textContent = word.emoji;
+        els.cardEmoji.style.display = "";
+      };
+      img.src = imgPath;
+    }
 
     els.cardWord.textContent = word.word;
     els.cardMeaning.textContent = word.meaning;
@@ -364,17 +384,33 @@
   }
 
   // ---------- 音声 (TTS) ----------
-  // 子供向けの明るい声を選択
+  let cachedVoice = null;
+
+  // 子供向けの明るい声を選択してキャッシュ
   function pickChildFriendlyVoice() {
+    if (cachedVoice) return cachedVoice;
     const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return null;
     const enVoices = voices.filter((v) => v.lang.startsWith("en"));
-    // 優先: Samantha (iOS/Mac), Zira (Windows), Female系
-    const preferred = ["Samantha", "Karen", "Zira", "Hazel", "Female"];
+    // 優先順: 明るい女性の声
+    const preferred = [
+      "Samantha",  // iOS / macOS
+      "Karen",     // iOS / macOS (Australian)
+      "Moira",     // iOS / macOS (Irish)
+      "Tessa",     // iOS / macOS (South African)
+      "Zira",      // Windows
+      "Hazel",     // Windows (UK)
+      "Susan",     // Windows
+      "Female",    // 汎用
+    ];
     for (const name of preferred) {
       const found = enVoices.find((v) => v.name.includes(name));
-      if (found) return found;
+      if (found) { cachedVoice = found; return found; }
     }
-    return enVoices[0] || null;
+    // en-US の最初の声をフォールバック
+    const fallback = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
+    cachedVoice = fallback;
+    return fallback;
   }
 
   function speakSentence(text) {
@@ -383,7 +419,7 @@
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
     utter.rate = 0.75;
-    utter.pitch = 1.4;
+    utter.pitch = 1.6;
     utter.volume = 1.0;
 
     const voice = pickChildFriendlyVoice();
@@ -398,7 +434,7 @@
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
     utter.rate = 0.65;
-    utter.pitch = 1.5;
+    utter.pitch = 1.7;
     utter.volume = 1.0;
 
     const voice = pickChildFriendlyVoice();
@@ -410,8 +446,11 @@
   // 音声リストが非同期で読み込まれるブラウザ対応
   if ("speechSynthesis" in window) {
     window.speechSynthesis.onvoiceschanged = () => {
-      window.speechSynthesis.getVoices();
+      cachedVoice = null; // リスト更新時にキャッシュクリア
+      pickChildFriendlyVoice();
     };
+    // 初回ロード
+    pickChildFriendlyVoice();
   }
 
   // ---------- 効果音 (Web Audio API) ----------
