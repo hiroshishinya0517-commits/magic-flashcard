@@ -335,9 +335,6 @@ html, body {
   animation: cardBounce 2s ease-in-out infinite;
   text-align: center;
   letter-spacing: 4px;
-}
-
-.card-image.loaded + .card-emoji {
   display: none;
 }
 

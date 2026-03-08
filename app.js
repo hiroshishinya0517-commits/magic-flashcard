@@ -55,7 +55,7 @@
   let isSwiping = false;
   let setCorrect = 0;
   let setWrong = 0;
-  const preloadedImages = {}; // プリロード済み画像キャッシュ
+  const imageCache = {}; // { id: HTMLImageElement }
 
   // タッチ/マウス操作
   let startX = 0;
@@ -97,6 +97,31 @@
     const d = new Date(dateStr);
     d.setDate(d.getDate() + days);
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  }
+
+  // ---------- 画像プリロード ----------
+  // 1枚の画像をロードしてPromiseを返す
+  function loadImage(word) {
+    return new Promise((resolve) => {
+      if (imageCache[word.id]) {
+        resolve(imageCache[word.id]);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        imageCache[word.id] = img;
+        resolve(img);
+      };
+      img.onerror = () => {
+        resolve(null); // 画像なし
+      };
+      img.src = `images/${word.id}.png`;
+    });
+  }
+
+  // セット全体をプリロード（Promiseを返す）
+  function preloadSetImages(words) {
+    return Promise.all(words.map(loadImage));
   }
 
   // ---------- 学習セット生成 ----------
@@ -143,16 +168,6 @@
       `<span>📝 きょう ${due.length} <ruby>枚<rt>まい</rt></ruby></span>`;
   }
 
-  // ---------- 画像プリロード ----------
-  function preloadSetImages(words) {
-    words.forEach((word) => {
-      if (preloadedImages[word.id]) return;
-      const img = new Image();
-      img.onload = () => { preloadedImages[word.id] = img.src; };
-      img.src = `images/${word.id}.png`;
-    });
-  }
-
   // ---------- 学習開始 ----------
   function startLearning() {
     currentSet = buildSet();
@@ -163,9 +178,12 @@
     currentIndex = 0;
     setCorrect = 0;
     setWrong = 0;
-    preloadSetImages(currentSet);
     showScreen("learn");
-    showCard();
+
+    // 全画像をプリロードしてからカード表示
+    preloadSetImages(currentSet).then(() => {
+      showCard();
+    });
   }
 
   // ---------- カード表示 ----------
@@ -179,40 +197,25 @@
     isFlipped = false;
     isSwiping = false;
 
+    // カードを一旦隠す
+    els.cardWrapper.style.visibility = "hidden";
+
     // リセット
     els.card.classList.remove("flipped");
-    els.cardWrapper.className = "card-wrapper card-enter";
+    els.cardWrapper.className = "card-wrapper";
     els.cardWrapper.style.transform = "";
     els.cardWrapper.style.opacity = "";
     els.indicatorLeft.style.opacity = 0;
     els.indicatorRight.style.opacity = 0;
 
-    // カード内容 - 画像のみ表示（絵文字は非表示）
+    // 絵文字は常に非表示
     els.cardEmoji.style.display = "none";
+
+    // 画像表示
     els.cardImage.classList.remove("loaded");
+    els.cardImage.src = "";
 
-    const imgPath = `images/${word.id}.png`;
-    if (preloadedImages[word.id]) {
-      // プリロード済み → 即表示
-      els.cardImage.src = preloadedImages[word.id];
-      els.cardImage.classList.add("loaded");
-    } else {
-      // 未ロード → 読み込み完了まで待つ
-      els.cardImage.src = "";
-      const img = new Image();
-      img.onload = () => {
-        preloadedImages[word.id] = imgPath;
-        els.cardImage.src = imgPath;
-        els.cardImage.classList.add("loaded");
-      };
-      img.onerror = () => {
-        // 画像がない場合のみ絵文字表示
-        els.cardEmoji.textContent = word.emoji;
-        els.cardEmoji.style.display = "";
-      };
-      img.src = imgPath;
-    }
-
+    // 裏面
     els.cardWord.textContent = word.word;
     els.cardMeaning.textContent = word.meaning;
     els.cardSentence.textContent = word.sentence_en;
@@ -221,8 +224,24 @@
     // プログレス
     updateProgress();
 
-    // 音声自動再生
-    setTimeout(() => speakSentence(word.sentence_en), 500);
+    // 画像をロードしてからカードを表示
+    loadImage(word).then((img) => {
+      if (img) {
+        els.cardImage.src = img.src;
+        els.cardImage.classList.add("loaded");
+      } else {
+        // 画像が存在しない場合のみ絵文字フォールバック
+        els.cardEmoji.textContent = word.emoji;
+        els.cardEmoji.style.display = "";
+      }
+
+      // カードを表示（アニメーション付き）
+      els.cardWrapper.style.visibility = "visible";
+      els.cardWrapper.classList.add("card-enter");
+
+      // 音声自動再生
+      setTimeout(() => speakSentence(word.sentence_en), 400);
+    });
   }
 
   function updateProgress() {
@@ -384,73 +403,93 @@
   }
 
   // ---------- 音声 (TTS) ----------
-  let cachedVoice = null;
+  // 音声リストの準備状態を管理
+  let voicesReady = false;
+  let selectedVoice = null;
 
-  // 子供向けの明るい声を選択してキャッシュ
-  function pickChildFriendlyVoice() {
-    if (cachedVoice) return cachedVoice;
+  function setupVoices() {
     const voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) return null;
+    if (voices.length === 0) return;
+
+    voicesReady = true;
     const enVoices = voices.filter((v) => v.lang.startsWith("en"));
-    // 優先順: 明るい女性の声
+
+    // デバッグ: コンソールに利用可能な英語音声を出力
+    console.log("利用可能な英語音声:", enVoices.map((v) => v.name + " (" + v.lang + ")"));
+
+    // 明るい女性の声を優先的に選択
     const preferred = [
-      "Samantha",  // iOS / macOS
-      "Karen",     // iOS / macOS (Australian)
-      "Moira",     // iOS / macOS (Irish)
-      "Tessa",     // iOS / macOS (South African)
-      "Zira",      // Windows
-      "Hazel",     // Windows (UK)
-      "Susan",     // Windows
-      "Female",    // 汎用
+      "Samantha",   // iOS / macOS (最も自然な女性の声)
+      "Karen",      // iOS / macOS (Australian)
+      "Moira",      // iOS / macOS (Irish)
+      "Tessa",      // iOS / macOS (South African)
+      "Zira",       // Windows
+      "Hazel",      // Windows (UK)
+      "Susan",      // Windows
+      "Female",     // 汎用
     ];
+
     for (const name of preferred) {
       const found = enVoices.find((v) => v.name.includes(name));
-      if (found) { cachedVoice = found; return found; }
+      if (found) {
+        selectedVoice = found;
+        console.log("選択された音声:", found.name);
+        return;
+      }
     }
-    // en-US の最初の声をフォールバック
-    const fallback = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
-    cachedVoice = fallback;
-    return fallback;
+
+    // フォールバック: en-USの最初の声
+    selectedVoice = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
+    if (selectedVoice) {
+      console.log("フォールバック音声:", selectedVoice.name);
+    }
   }
 
+  function speak(text, rate, pitch) {
+    if (!("speechSynthesis" in window)) return;
+
+    // iOSのバグ対策: cancel後にわずかに遅延させる
+    window.speechSynthesis.cancel();
+
+    setTimeout(() => {
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.lang = "en-US";
+      utter.rate = rate;
+      utter.pitch = pitch;
+      utter.volume = 1.0;
+
+      // 音声が準備できていない場合は再取得を試みる
+      if (!voicesReady) {
+        setupVoices();
+      }
+
+      if (selectedVoice) {
+        utter.voice = selectedVoice;
+      }
+
+      window.speechSynthesis.speak(utter);
+    }, 50);
+  }
+
+  // 例文の読み上げ: ゆっくり、明るいトーン
   function speakSentence(text) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-US";
-    utter.rate = 0.75;
-    utter.pitch = 1.6;
-    utter.volume = 1.0;
-
-    const voice = pickChildFriendlyVoice();
-    if (voice) utter.voice = voice;
-
-    window.speechSynthesis.speak(utter);
+    speak(text, 0.6, 1.5);
   }
 
+  // 単語の読み上げ: さらにゆっくり、高めの声
   function speakWord(text) {
-    if (!("speechSynthesis" in window)) return;
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance(text);
-    utter.lang = "en-US";
-    utter.rate = 0.65;
-    utter.pitch = 1.7;
-    utter.volume = 1.0;
-
-    const voice = pickChildFriendlyVoice();
-    if (voice) utter.voice = voice;
-
-    window.speechSynthesis.speak(utter);
+    speak(text, 0.5, 1.6);
   }
 
-  // 音声リストが非同期で読み込まれるブラウザ対応
+  // 音声リスト初期化
   if ("speechSynthesis" in window) {
+    // 初回取得（Chrome等ではすぐに取得可能）
+    setupVoices();
+
+    // 非同期で音声リストが読み込まれるブラウザ対応（iOS Safari等）
     window.speechSynthesis.onvoiceschanged = () => {
-      cachedVoice = null; // リスト更新時にキャッシュクリア
-      pickChildFriendlyVoice();
+      setupVoices();
     };
-    // 初回ロード
-    pickChildFriendlyVoice();
   }
 
   // ---------- 効果音 (Web Audio API) ----------
