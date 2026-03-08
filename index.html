@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>Magic Flashcard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- ========== スタート画面 ========== -->
+  <div id="screen-start" class="screen active">
+    <div class="start-bg">
+      <div class="floating-emoji e1">✨</div>
+      <div class="floating-emoji e2">⭐</div>
+      <div class="floating-emoji e3">🌟</div>
+      <div class="floating-emoji e4">💫</div>
+    </div>
+    <div class="start-content">
+      <h1 class="app-title">Magic<br>Flashcard</h1>
+      <p class="app-subtitle">まほうの カードで<br>えいごを おぼえよう！</p>
+      <div class="start-stats" id="start-stats"></div>
+      <button class="btn-start" id="btn-start">
+        <span class="btn-icon">🪄</span>
+        はじめる！
+      </button>
+      <button class="btn-reset" id="btn-reset">
+        <ruby>学習<rt>がくしゅう</rt></ruby>データを リセット
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 学習画面 ========== -->
+  <div id="screen-learn" class="screen">
+    <!-- 上部プログレス -->
+    <div class="learn-header">
+      <button class="btn-back" id="btn-back">✕</button>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-text" id="progress-text">1 / 10</div>
+    </div>
+
+    <!-- カードエリア -->
+    <div class="card-area" id="card-area">
+      <!-- スワイプインジケーター -->
+      <div class="swipe-indicator left" id="indicator-left">❌</div>
+      <div class="swipe-indicator right" id="indicator-right">⭕</div>
+
+      <!-- カード -->
+      <div class="card-wrapper" id="card-wrapper">
+        <div class="card" id="card">
+          <!-- 表面 -->
+          <div class="card-face card-front" id="card-front">
+            <img class="card-image" id="card-image" src="" alt="" />
+            <div class="card-emoji" id="card-emoji">🌱</div>
+            <div class="card-hint">タップして うらを みよう！</div>
+          </div>
+          <!-- 裏面 -->
+          <div class="card-face card-back" id="card-back">
+            <div class="card-word" id="card-word">grow</div>
+            <div class="card-meaning" id="card-meaning">そだつ</div>
+            <div class="card-sentence" id="card-sentence">The tree grows tall.</div>
+            <div class="card-sentence-ja" id="card-sentence-ja">木が たかく そだつよ。</div>
+            <button class="btn-replay" id="btn-replay">🔊 もういちど きく</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 下部ヒント -->
+    <div class="swipe-hint">
+      <span class="hint-left">← わからない</span>
+      <span class="hint-right">わかった →</span>
+    </div>
+  </div>
+
+  <!-- ========== クリア画面 ========== -->
+  <div id="screen-clear" class="screen">
+    <div class="clear-content">
+      <div class="clear-confetti" id="clear-confetti"></div>
+      <div class="clear-icon">🎉</div>
+      <h2 class="clear-title">クリア！</h2>
+      <div class="clear-stats" id="clear-stats"></div>
+      <button class="btn-start" id="btn-next-set">
+        <span class="btn-icon">🪄</span>
+        つぎの セット！
+      </button>
+      <button class="btn-secondary" id="btn-back-home">
+        もどる
+      </button>
+    </div>
+  </div>
+
+  <!-- ========== 全完了画面 ========== -->
+  <div id="screen-done" class="screen">
+    <div class="clear-content">
+      <div class="clear-icon">🏆</div>
+      <h2 class="clear-title">すごい！</h2>
+      <p class="done-message">きょうの カードは<br>ぜんぶ おわったよ！</p>
+      <p class="done-sub">あしたも やろうね！</p>
+      <button class="btn-start" id="btn-done-home">
+        <span class="btn-icon">🏠</span>
+        もどる
+      </button>
+    </div>
+  </div>
+
+  <script src="words.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
