@@ -175,10 +175,10 @@
     els.indicatorLeft.style.opacity = 0;
     els.indicatorRight.style.opacity = 0;
 
-    // カード内容 - 画像 or 絵文字
+    // カード内容 - 画像表示（絵文字は非表示）
     els.cardImage.classList.remove("loaded");
     els.cardImage.src = "";
-    els.cardEmoji.textContent = word.emoji;
+    els.cardEmoji.textContent = "⏳";
     els.cardEmoji.style.display = "";
 
     const imgPath = `images/${word.id}.png`;
@@ -186,9 +186,10 @@
     img.onload = () => {
       els.cardImage.src = imgPath;
       els.cardImage.classList.add("loaded");
+      els.cardEmoji.style.display = "none";
     };
     img.onerror = () => {
-      // 画像なし → 絵文字フォールバック（何もしない）
+      els.cardEmoji.textContent = word.emoji;
     };
     img.src = imgPath;
 
@@ -363,21 +364,30 @@
   }
 
   // ---------- 音声 (TTS) ----------
+  // 子供向けの明るい声を選択
+  function pickChildFriendlyVoice() {
+    const voices = window.speechSynthesis.getVoices();
+    const enVoices = voices.filter((v) => v.lang.startsWith("en"));
+    // 優先: Samantha (iOS/Mac), Zira (Windows), Female系
+    const preferred = ["Samantha", "Karen", "Zira", "Hazel", "Female"];
+    for (const name of preferred) {
+      const found = enVoices.find((v) => v.name.includes(name));
+      if (found) return found;
+    }
+    return enVoices[0] || null;
+  }
+
   function speakSentence(text) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
-    utter.rate = 0.8;
-    utter.pitch = 1.1;
+    utter.rate = 0.75;
+    utter.pitch = 1.4;
+    utter.volume = 1.0;
 
-    // 英語の音声を選択
-    const voices = window.speechSynthesis.getVoices();
-    const enVoice = voices.find(
-      (v) => v.lang.startsWith("en") && v.name.includes("Female")
-    ) || voices.find((v) => v.lang.startsWith("en-US"))
-      || voices.find((v) => v.lang.startsWith("en"));
-    if (enVoice) utter.voice = enVoice;
+    const voice = pickChildFriendlyVoice();
+    if (voice) utter.voice = voice;
 
     window.speechSynthesis.speak(utter);
   }
@@ -387,15 +397,12 @@
     window.speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     utter.lang = "en-US";
-    utter.rate = 0.7;
-    utter.pitch = 1.0;
+    utter.rate = 0.65;
+    utter.pitch = 1.5;
+    utter.volume = 1.0;
 
-    const voices = window.speechSynthesis.getVoices();
-    const enVoice = voices.find(
-      (v) => v.lang.startsWith("en") && v.name.includes("Female")
-    ) || voices.find((v) => v.lang.startsWith("en-US"))
-      || voices.find((v) => v.lang.startsWith("en"));
-    if (enVoice) utter.voice = enVoice;
+    const voice = pickChildFriendlyVoice();
+    if (voice) utter.voice = voice;
 
     window.speechSynthesis.speak(utter);
   }
