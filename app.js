@@ -403,9 +403,10 @@
   }
 
   // ---------- 音声 (TTS) ----------
-  // 音声リストの準備状態を管理
   let voicesReady = false;
   let selectedVoice = null;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isMac = /Macintosh/.test(navigator.userAgent);
 
   function setupVoices() {
     const voices = window.speechSynthesis.getVoices();
@@ -414,82 +415,80 @@
     voicesReady = true;
     const enVoices = voices.filter((v) => v.lang.startsWith("en"));
 
-    // デバッグ: コンソールに利用可能な英語音声を出力
     console.log("利用可能な英語音声:", enVoices.map((v) => v.name + " (" + v.lang + ")"));
 
-    // 明るい女性の声を優先的に選択
-    const preferred = [
-      "Samantha",   // iOS / macOS (最も自然な女性の声)
-      "Karen",      // iOS / macOS (Australian)
-      "Moira",      // iOS / macOS (Irish)
-      "Tessa",      // iOS / macOS (South African)
-      "Zira",       // Windows
-      "Hazel",      // Windows (UK)
-      "Susan",      // Windows
-      "Female",     // 汎用
-    ];
-
-    for (const name of preferred) {
-      const found = enVoices.find((v) => v.name.includes(name));
-      if (found) {
-        selectedVoice = found;
-        console.log("選択された音声:", found.name);
-        return;
+    if (isIOS || isMac) {
+      // iOS/Mac: Samantha等の自然な声
+      const macPreferred = ["Samantha", "Karen", "Moira", "Tessa"];
+      for (const name of macPreferred) {
+        const found = enVoices.find((v) => v.name.includes(name));
+        if (found) { selectedVoice = found; break; }
+      }
+    } else {
+      // Windows/その他: David（男性）のほうが高ピッチで明るく聞こえる
+      // Ziraは高ピッチだと不自然になるため避ける
+      const winPreferred = ["David", "Mark", "George", "Zira", "Hazel", "Susan"];
+      for (const name of winPreferred) {
+        const found = enVoices.find((v) => v.name.includes(name));
+        if (found) { selectedVoice = found; break; }
       }
     }
 
-    // フォールバック: en-USの最初の声
-    selectedVoice = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
-    if (selectedVoice) {
-      console.log("フォールバック音声:", selectedVoice.name);
+    if (!selectedVoice) {
+      selectedVoice = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
+    }
+    console.log("選択された音声:", selectedVoice ? selectedVoice.name : "なし");
+  }
+
+  // デバイスに応じた音声パラメータを返す
+  function getVoiceParams(type) {
+    if (isIOS || isMac) {
+      // iOS/Mac: Samanthaは高ピッチが自然
+      return type === "sentence"
+        ? { rate: 0.6, pitch: 1.5 }
+        : { rate: 0.5, pitch: 1.6 };
+    } else {
+      // Windows: Davidを使い、ピッチを上げて若く明るい声に
+      // Ziraの場合は控えめなピッチ
+      const isZira = selectedVoice && selectedVoice.name.includes("Zira");
+      if (isZira) {
+        return type === "sentence"
+          ? { rate: 0.65, pitch: 1.15 }
+          : { rate: 0.55, pitch: 1.2 };
+      }
+      return type === "sentence"
+        ? { rate: 0.65, pitch: 1.6 }
+        : { rate: 0.55, pitch: 1.7 };
     }
   }
 
-  function speak(text, rate, pitch) {
+  function speak(text, type) {
     if (!("speechSynthesis" in window)) return;
-
-    // iOSのバグ対策: cancel後にわずかに遅延させる
     window.speechSynthesis.cancel();
 
     setTimeout(() => {
       const utter = new SpeechSynthesisUtterance(text);
       utter.lang = "en-US";
-      utter.rate = rate;
-      utter.pitch = pitch;
       utter.volume = 1.0;
 
-      // 音声が準備できていない場合は再取得を試みる
-      if (!voicesReady) {
-        setupVoices();
-      }
+      if (!voicesReady) setupVoices();
+      if (selectedVoice) utter.voice = selectedVoice;
 
-      if (selectedVoice) {
-        utter.voice = selectedVoice;
-      }
+      const params = getVoiceParams(type);
+      utter.rate = params.rate;
+      utter.pitch = params.pitch;
 
       window.speechSynthesis.speak(utter);
     }, 50);
   }
 
-  // 例文の読み上げ: ゆっくり、明るいトーン
-  function speakSentence(text) {
-    speak(text, 0.6, 1.5);
-  }
-
-  // 単語の読み上げ: さらにゆっくり、高めの声
-  function speakWord(text) {
-    speak(text, 0.5, 1.6);
-  }
+  function speakSentence(text) { speak(text, "sentence"); }
+  function speakWord(text) { speak(text, "word"); }
 
   // 音声リスト初期化
   if ("speechSynthesis" in window) {
-    // 初回取得（Chrome等ではすぐに取得可能）
     setupVoices();
-
-    // 非同期で音声リストが読み込まれるブラウザ対応（iOS Safari等）
-    window.speechSynthesis.onvoiceschanged = () => {
-      setupVoices();
-    };
+    window.speechSynthesis.onvoiceschanged = () => { setupVoices(); };
   }
 
   // ---------- 効果音 (Web Audio API) ----------
