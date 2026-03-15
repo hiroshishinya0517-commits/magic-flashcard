@@ -403,92 +403,33 @@
   }
 
   // ---------- 音声 (TTS) ----------
-  let voicesReady = false;
-  let selectedVoice = null;
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-  const isMac = /Macintosh/.test(navigator.userAgent);
-
-  function setupVoices() {
-    const voices = window.speechSynthesis.getVoices();
-    if (voices.length === 0) return;
-
-    voicesReady = true;
-    const enVoices = voices.filter((v) => v.lang.startsWith("en"));
-
-    console.log("利用可能な英語音声:", enVoices.map((v) => v.name + " (" + v.lang + ")"));
-
-    if (isIOS || isMac) {
-      // iOS/Mac: Samantha等の自然な声
-      const macPreferred = ["Samantha", "Karen", "Moira", "Tessa"];
-      for (const name of macPreferred) {
-        const found = enVoices.find((v) => v.name.includes(name));
-        if (found) { selectedVoice = found; break; }
-      }
-    } else {
-      // Windows/その他: David（男性）のほうが高ピッチで明るく聞こえる
-      // Ziraは高ピッチだと不自然になるため避ける
-      const winPreferred = ["David", "Mark", "George", "Zira", "Hazel", "Susan"];
-      for (const name of winPreferred) {
-        const found = enVoices.find((v) => v.name.includes(name));
-        if (found) { selectedVoice = found; break; }
-      }
-    }
-
-    if (!selectedVoice) {
-      selectedVoice = enVoices.find((v) => v.lang === "en-US") || enVoices[0] || null;
-    }
-    console.log("選択された音声:", selectedVoice ? selectedVoice.name : "なし");
-  }
-
-  // デバイスに応じた音声パラメータを返す
-  function getVoiceParams(type) {
-    if (isIOS || isMac) {
-      // iOS/Mac: Samanthaは高ピッチが自然
-      return type === "sentence"
-        ? { rate: 0.6, pitch: 1.5 }
-        : { rate: 0.5, pitch: 1.6 };
-    } else {
-      // Windows: Davidを使い、ピッチを上げて若く明るい声に
-      // Ziraの場合は控えめなピッチ
-      const isZira = selectedVoice && selectedVoice.name.includes("Zira");
-      if (isZira) {
-        return type === "sentence"
-          ? { rate: 0.65, pitch: 1.15 }
-          : { rate: 0.55, pitch: 1.2 };
-      }
-      return type === "sentence"
-        ? { rate: 0.65, pitch: 1.6 }
-        : { rate: 0.55, pitch: 1.7 };
-    }
-  }
-
-  function speak(text, type) {
+  function speakSentence(text) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
-
-    setTimeout(() => {
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.lang = "en-US";
-      utter.volume = 1.0;
-
-      if (!voicesReady) setupVoices();
-      if (selectedVoice) utter.voice = selectedVoice;
-
-      const params = getVoiceParams(type);
-      utter.rate = params.rate;
-      utter.pitch = params.pitch;
-
-      window.speechSynthesis.speak(utter);
-    }, 50);
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-US";
+    utter.rate = 0.8;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    window.speechSynthesis.speak(utter);
   }
 
-  function speakSentence(text) { speak(text, "sentence"); }
-  function speakWord(text) { speak(text, "word"); }
+  function speakWord(text) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = "en-US";
+    utter.rate = 0.7;
+    utter.pitch = 1.0;
+    utter.volume = 1.0;
+    window.speechSynthesis.speak(utter);
+  }
 
-  // 音声リスト初期化
+  // 音声リストが非同期で読み込まれるブラウザ対応
   if ("speechSynthesis" in window) {
-    setupVoices();
-    window.speechSynthesis.onvoiceschanged = () => { setupVoices(); };
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices();
+    };
   }
 
   // ---------- 効果音 (Web Audio API) ----------
